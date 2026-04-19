@@ -2,19 +2,22 @@
 import argparse
 import os
 import sys
+import math
 from AppKit import (
-    NSApplication, NSApp, NSWindow, NSView, NSImage, NSColor, NSBezierPath,
+    NSApplication, NSWindow, NSView, NSImage, NSColor, NSBezierPath,
     NSScreen, NSShadow, NSFont, NSAttributedString, NSGraphicsContext,
-    NSAnimationContext, NSSound, NSWindowStyleMaskBorderless,
-    NSBackingStoreBuffered, NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSSound, NSWindowStyleMaskBorderless, NSBackingStoreBuffered,
+    NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowCollectionBehaviorStationary, NSWindowCollectionBehaviorIgnoresCycle,
     NSWindowCollectionBehaviorFullScreenAuxiliary,
     NSFontAttributeName, NSForegroundColorAttributeName,
     NSImageInterpolationHigh,
 )
-from Foundation import NSMakeRect, NSMakePoint, NSMakeSize, NSObject
+from Foundation import (
+    NSMakeRect, NSMakePoint, NSMakeSize, NSObject, NSDate, NSTimer,
+    NSAffineTransform,
+)
 import objc
-import math
 
 p = argparse.ArgumentParser()
 p.add_argument("-m", "--message", default="Notification")
@@ -25,7 +28,7 @@ args = p.parse_args()
 BOT_PATH = os.path.expanduser("~/.claude/notification-bot.png")
 
 app = NSApplication.sharedApplication()
-app.setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory
+app.setActivationPolicy_(1)
 
 bot_image = NSImage.alloc().initWithContentsOfFile_(BOT_PATH)
 if bot_image is None:
@@ -40,7 +43,7 @@ pad_h = 9.0
 pad_v = 6.0
 radius = 7.0
 
-font = NSFont.systemFontOfSize_weight_(10.0, 0.3)  # medium ~ 0.3
+font = NSFont.systemFontOfSize_weight_(10.0, 0.3)
 text_attrs = {
     NSFontAttributeName: font,
     NSForegroundColorAttributeName: NSColor.blackColor(),
@@ -49,7 +52,7 @@ text_attrs = {
 attr = NSAttributedString.alloc().initWithString_attributes_(args.message, text_attrs)
 bounds = attr.boundingRectWithSize_options_(
     NSMakeSize(bubble_max_text_w, 1000.0),
-    (1 << 0) | (1 << 1)  # usesLineFragmentOrigin | usesFontLeading
+    (1 << 0) | (1 << 1)
 )
 text_w = math.ceil(bounds.size.width)
 text_h = math.ceil(bounds.size.height)
@@ -65,19 +68,18 @@ total_h = max(bot_h, bubble_h) + edge_pad * 2
 screen = NSScreen.mainScreen() or NSScreen.screens()[0]
 visible = screen.visibleFrame()
 margin = 24.0
-window_frame = NSMakeRect(
-    visible.origin.x + visible.size.width - total_w - margin,
-    visible.origin.y + visible.size.height - total_h - margin,
-    total_w,
-    total_h,
-)
+end_x = visible.origin.x + visible.size.width - total_w - margin
+window_y = visible.origin.y + visible.size.height - total_h - margin
+start_x = visible.origin.x + visible.size.width + 10.0  # off-screen right
+
+window_frame = NSMakeRect(start_x, window_y, total_w, total_h)
 
 window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
     window_frame, NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False
 )
 window.setOpaque_(False)
 window.setBackgroundColor_(NSColor.clearColor())
-window.setLevel_(25)  # NSStatusWindowLevel
+window.setLevel_(25)
 window.setIgnoresMouseEvents_(True)
 window.setHasShadow_(False)
 window.setCollectionBehavior_(
@@ -94,6 +96,8 @@ bot_rect = NSMakeRect(bubble_w + gap, (total_h - bot_h) / 2, bot_w, bot_h)
 class PopupView(NSView):
     def initWithFrame_(self, frame):
         self = objc.super(PopupView, self).initWithFrame_(frame)
+        self._angle = 0.0
+        self._bubble_alpha = 0.0
         return self
 
     def isFlipped(self):
@@ -103,44 +107,127 @@ class PopupView(NSView):
         ctx = NSGraphicsContext.currentContext()
         ctx.setImageInterpolation_(NSImageInterpolationHigh)
 
-        bot_image.drawInRect_(bot_rect)
-
         ctx.saveGraphicsState()
-        sh = NSShadow.alloc().init()
-        sh.setShadowOffset_(NSMakeSize(0, -2))
-        sh.setShadowBlurRadius_(8.0)
-        sh.setShadowColor_(NSColor.colorWithCalibratedWhite_alpha_(0.0, 0.30))
-        sh.set()
-
-        bubble = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            bubble_rect, radius, radius
-        )
-        tail = NSBezierPath.bezierPath()
-        tail.moveToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
-                                      bubble_rect.origin.y + bubble_rect.size.height / 2 - 5))
-        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width + 7,
-                                      bubble_rect.origin.y + bubble_rect.size.height / 2))
-        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
-                                      bubble_rect.origin.y + bubble_rect.size.height / 2 + 5))
-        tail.closePath()
-
-        NSColor.whiteColor().setFill()
-        bubble.fill()
-        tail.fill()
+        cx = bot_rect.origin.x + bot_rect.size.width / 2
+        cy = bot_rect.origin.y + bot_rect.size.height / 2
+        tx = NSAffineTransform.transform()
+        tx.translateXBy_yBy_(cx, cy)
+        tx.rotateByDegrees_(self._angle)
+        tx.translateXBy_yBy_(-cx, -cy)
+        tx.concat()
+        bot_image.drawInRect_(bot_rect)
         ctx.restoreGraphicsState()
 
-        text_rect = NSMakeRect(
-            bubble_rect.origin.x + pad_h,
-            bubble_rect.origin.y + pad_v,
-            bubble_rect.size.width - pad_h * 2,
-            bubble_rect.size.height - pad_v * 2,
-        )
-        attr.drawInRect_(text_rect)
+        a = self._bubble_alpha
+        if a > 0.01:
+            ctx.saveGraphicsState()
+            sh = NSShadow.alloc().init()
+            sh.setShadowOffset_(NSMakeSize(0, -2))
+            sh.setShadowBlurRadius_(8.0)
+            sh.setShadowColor_(NSColor.colorWithCalibratedWhite_alpha_(0.0, 0.30 * a))
+            sh.set()
+
+            bubble = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+                bubble_rect, radius, radius
+            )
+            tail = NSBezierPath.bezierPath()
+            tail.moveToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
+                                          bubble_rect.origin.y + bubble_rect.size.height / 2 - 5))
+            tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width + 7,
+                                          bubble_rect.origin.y + bubble_rect.size.height / 2))
+            tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
+                                          bubble_rect.origin.y + bubble_rect.size.height / 2 + 5))
+            tail.closePath()
+
+            NSColor.colorWithCalibratedWhite_alpha_(1.0, a).setFill()
+            bubble.fill()
+            tail.fill()
+            ctx.restoreGraphicsState()
+
+            faded_attrs = {
+                NSFontAttributeName: font,
+                NSForegroundColorAttributeName: NSColor.colorWithCalibratedWhite_alpha_(0.0, a),
+            }
+            faded = NSAttributedString.alloc().initWithString_attributes_(args.message, faded_attrs)
+            text_rect = NSMakeRect(
+                bubble_rect.origin.x + pad_h,
+                bubble_rect.origin.y + pad_v,
+                bubble_rect.size.width - pad_h * 2,
+                bubble_rect.size.height - pad_v * 2,
+            )
+            faded.drawInRect_(text_rect)
+
+
+def ease_out_back(t):
+    c1 = 1.70158
+    c3 = c1 + 1.0
+    return 1.0 + c3 * (t - 1.0) ** 3 + c1 * (t - 1.0) ** 2
+
+
+def ease_out_cubic(t):
+    return 1.0 - (1.0 - t) ** 3
+
+
+class Animator(NSObject):
+    def init(self):
+        self = objc.super(Animator, self).init()
+        self.view = None
+        self.window = None
+        self.start_x = 0.0
+        self.end_x = 0.0
+        self.idle_duration = 4.0
+        self.phase = "roll"
+        self.phase_start = None
+        return self
+
+    def tick_(self, timer):
+        now = NSDate.timeIntervalSinceReferenceDate()
+        if self.phase_start is None:
+            self.phase_start = now
+        elapsed = now - self.phase_start
+
+        if self.phase == "roll":
+            ROLL = 0.55
+            t = min(elapsed / ROLL, 1.0)
+            eased = ease_out_back(t)
+            x = self.start_x + (self.end_x - self.start_x) * eased
+            frame = self.window.frame()
+            self.window.setFrameOrigin_(NSMakePoint(x, frame.origin.y))
+            distance = abs(self.end_x - self.start_x)
+            circumference = math.pi * bot_w
+            turns = distance / max(circumference, 1.0)
+            self.view._angle = -eased * turns * 360.0
+            self.view.setNeedsDisplay_(True)
+            if t >= 1.0:
+                self.phase = "fade_in"
+                self.phase_start = now
+
+        elif self.phase == "fade_in":
+            FADE = 0.25
+            t = min(elapsed / FADE, 1.0)
+            self.view._bubble_alpha = ease_out_cubic(t)
+            self.view.setNeedsDisplay_(True)
+            if t >= 1.0:
+                self.phase = "idle"
+                self.phase_start = now
+
+        elif self.phase == "idle":
+            if elapsed >= self.idle_duration:
+                self.phase = "fade_out"
+                self.phase_start = now
+
+        elif self.phase == "fade_out":
+            FADE = 0.35
+            t = min(elapsed / FADE, 1.0)
+            self.window.setAlphaValue_(1.0 - t)
+            if t >= 1.0:
+                timer.invalidate()
+                NSApplication.sharedApplication().terminate_(None)
 
 
 view = PopupView.alloc().initWithFrame_(NSMakeRect(0, 0, total_w, total_h))
 window.setContentView_(view)
-window.setAlphaValue_(0.0)
+window.setAlphaValue_(1.0)
 window.orderFrontRegardless()
 
 if args.sound:
@@ -148,25 +235,15 @@ if args.sound:
     if snd:
         snd.play()
 
-NSAnimationContext.beginGrouping()
-NSAnimationContext.currentContext().setDuration_(0.22)
-window.animator().setAlphaValue_(1.0)
-NSAnimationContext.endGrouping()
+animator = Animator.alloc().init()
+animator.view = view
+animator.window = window
+animator.start_x = start_x
+animator.end_x = end_x
+animator.idle_duration = args.duration
 
-
-class Dismisser(NSObject):
-    def fire_(self, timer):
-        NSAnimationContext.beginGrouping()
-        NSAnimationContext.currentContext().setDuration_(0.35)
-        NSAnimationContext.currentContext().setCompletionHandler_(lambda: app.terminate_(None))
-        window.animator().setAlphaValue_(0.0)
-        NSAnimationContext.endGrouping()
-
-
-from Foundation import NSTimer
-dismisser = Dismisser.alloc().init()
 NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
-    args.duration, dismisser, b"fire:", None, False
+    1.0 / 60.0, animator, b"tick:", None, True
 )
 
 app.run()
