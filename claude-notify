@@ -195,7 +195,7 @@ class Animator(NSObject):
             self.window.setFrameOrigin_(NSMakePoint(x, frame.origin.y))
             distance = abs(self.end_x - self.start_x)
             circumference = math.pi * bot_w
-            turns = distance / max(circumference, 1.0)
+            turns = max(1, round(distance / max(circumference, 1.0)))
             self.view._angle = -eased * turns * 360.0
             self.view.setNeedsDisplay_(True)
             if t >= 1.0:
