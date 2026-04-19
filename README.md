@@ -55,9 +55,9 @@ Add to `~/.claude/settings.json` — see [examples/settings.json](examples/setti
 The two hooks worth adding:
 
 - **`Notification`** — fires when Claude needs your permission for something. Pulls the message text out of the hook's stdin JSON and shows it in the bubble.
-- **`Stop`** — fires when Claude finishes a response. Useful if you tab away while Claude works.
+- **`Stop`** — fires when Claude finishes a response. The `claude-notify-stop` wrapper reads the hook's stdin to find the transcript path, extracts the last assistant text block, strips markdown, truncates to ~100 chars, and pipes that into the bubble — so the popup tells you *what* Claude just said, not just "Done!".
 
-Both hooks use `nohup ... & disown` so the popup runs detached and doesn't block Claude from continuing.
+Both hooks detach the popup with `nohup ... & disown` so they don't block Claude from continuing.
 
 ## Customizing
 
@@ -71,7 +71,7 @@ Open `~/.claude/bin/claude-notify` and edit:
 ## Uninstall
 
 ```sh
-rm -rf ~/.claude/bin/claude-notify ~/.claude/notification-bot.png
+rm -rf ~/.claude/bin/claude-notify ~/.claude/bin/claude-notify-stop ~/.claude/notification-bot.png
 ```
 
 Then remove the `Notification` and `Stop` blocks from `~/.claude/settings.json`.

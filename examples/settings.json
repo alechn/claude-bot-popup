@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "nohup \"$HOME/.claude/bin/claude-notify\" --message \"Done!\" --duration 3 --sound Pop >/dev/null 2>&1 & disown; true"
+            "command": "\"$HOME/.claude/bin/claude-notify-stop\""
           }
         ]
       }

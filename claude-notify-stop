@@ -1,0 +1,37 @@
+#!/bin/bash
+# Stop-hook wrapper: pulls the last assistant text from the transcript,
+# strips markdown, truncates, and fires the bot popup with that summary.
+set -u
+
+input=$(cat)
+transcript=$(printf '%s' "$input" | jq -r '.transcript_path // ""' 2>/dev/null)
+
+msg="Done!"
+if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+  extracted=$(tail -200 "$transcript" 2>/dev/null | jq -rs '
+    [ .[]
+      | select(.type == "assistant")
+      | .message.content[]?
+      | select(.type == "text")
+      | .text
+      | select(length > 0)
+    ] | last // ""
+  ' 2>/dev/null)
+  if [ -n "$extracted" ]; then
+    cleaned=$(printf '%s' "$extracted" \
+      | sed -E 's/`[^`]*`//g; s/\[([^]]+)\]\([^)]+\)/\1/g; s/[*_#>]//g' \
+      | tr '\n' ' ' \
+      | sed -E 's/  +/ /g; s/^ +//; s/ +$//')
+    if [ -n "$cleaned" ]; then
+      if [ ${#cleaned} -gt 100 ]; then
+        msg="${cleaned:0:97}..."
+      else
+        msg="$cleaned"
+      fi
+    fi
+  fi
+fi
+
+nohup "$HOME/.claude/bin/claude-notify" --message "$msg" --duration 5 --sound Pop </dev/null >/dev/null 2>&1 &
+disown
+exit 0

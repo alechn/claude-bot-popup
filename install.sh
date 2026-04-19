@@ -30,6 +30,10 @@ sed "1s|.*|#!$PYTHON|" "$REPO_DIR/claude-notify" > "$SCRIPT_DEST"
 chmod +x "$SCRIPT_DEST"
 echo "Installed: $SCRIPT_DEST"
 
+cp "$REPO_DIR/claude-notify-stop" "$BIN_DIR/claude-notify-stop"
+chmod +x "$BIN_DIR/claude-notify-stop"
+echo "Installed: $BIN_DIR/claude-notify-stop"
+
 if [[ ! -f "$IMAGE_DEST" ]]; then
   echo
   echo "Provide a path to your mascot PNG (transparent background recommended)."
