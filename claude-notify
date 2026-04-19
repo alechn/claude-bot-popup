@@ -32,15 +32,15 @@ if bot_image is None:
     sys.stderr.write(f"missing bot image at {BOT_PATH}\n")
     sys.exit(1)
 
-bot_w = 72.0
+bot_w = 56.0
 bot_h = bot_w * (bot_image.size().height / bot_image.size().width)
 
-bubble_max_text_w = 200.0
-pad_h = 11.0
-pad_v = 8.0
-radius = 9.0
+bubble_max_text_w = 170.0
+pad_h = 9.0
+pad_v = 6.0
+radius = 7.0
 
-font = NSFont.systemFontOfSize_weight_(11.0, 0.3)  # medium ~ 0.3
+font = NSFont.systemFontOfSize_weight_(10.0, 0.3)  # medium ~ 0.3
 text_attrs = {
     NSFontAttributeName: font,
     NSForegroundColorAttributeName: NSColor.blackColor(),
@@ -57,8 +57,8 @@ text_h = math.ceil(bounds.size.height)
 bubble_w = text_w + pad_h * 2
 bubble_h = text_h + pad_v * 2
 
-gap = 8.0
-edge_pad = 8.0
+gap = 6.0
+edge_pad = 6.0
 total_w = bot_w + gap + bubble_w + edge_pad
 total_h = max(bot_h, bubble_h) + edge_pad * 2
 
@@ -87,8 +87,8 @@ window.setCollectionBehavior_(
     | NSWindowCollectionBehaviorFullScreenAuxiliary
 )
 
-bot_rect = NSMakeRect(0, (total_h - bot_h) / 2, bot_w, bot_h)
-bubble_rect = NSMakeRect(bot_w + gap, (total_h - bubble_h) / 2, bubble_w, bubble_h)
+bubble_rect = NSMakeRect(0, (total_h - bubble_h) / 2, bubble_w, bubble_h)
+bot_rect = NSMakeRect(bubble_w + gap, (total_h - bot_h) / 2, bot_w, bot_h)
 
 
 class PopupView(NSView):
@@ -116,12 +116,12 @@ class PopupView(NSView):
             bubble_rect, radius, radius
         )
         tail = NSBezierPath.bezierPath()
-        tail.moveToPoint_(NSMakePoint(bubble_rect.origin.x + 1,
-                                      bubble_rect.origin.y + bubble_rect.size.height / 2 - 6))
-        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x - 8,
+        tail.moveToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
+                                      bubble_rect.origin.y + bubble_rect.size.height / 2 - 5))
+        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width + 7,
                                       bubble_rect.origin.y + bubble_rect.size.height / 2))
-        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + 1,
-                                      bubble_rect.origin.y + bubble_rect.size.height / 2 + 6))
+        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + bubble_rect.size.width - 1,
+                                      bubble_rect.origin.y + bubble_rect.size.height / 2 + 5))
         tail.closePath()
 
         NSColor.whiteColor().setFill()
