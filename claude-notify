@@ -1,0 +1,172 @@
+#!/opt/homebrew/bin/python3.11
+import argparse
+import os
+import sys
+from AppKit import (
+    NSApplication, NSApp, NSWindow, NSView, NSImage, NSColor, NSBezierPath,
+    NSScreen, NSShadow, NSFont, NSAttributedString, NSGraphicsContext,
+    NSAnimationContext, NSSound, NSWindowStyleMaskBorderless,
+    NSBackingStoreBuffered, NSWindowCollectionBehaviorCanJoinAllSpaces,
+    NSWindowCollectionBehaviorStationary, NSWindowCollectionBehaviorIgnoresCycle,
+    NSWindowCollectionBehaviorFullScreenAuxiliary,
+    NSFontAttributeName, NSForegroundColorAttributeName,
+    NSImageInterpolationHigh,
+)
+from Foundation import NSMakeRect, NSMakePoint, NSMakeSize, NSObject
+import objc
+import math
+
+p = argparse.ArgumentParser()
+p.add_argument("-m", "--message", default="Notification")
+p.add_argument("-d", "--duration", type=float, default=4.0)
+p.add_argument("-s", "--sound", default=None)
+args = p.parse_args()
+
+BOT_PATH = os.path.expanduser("~/.claude/notification-bot.png")
+
+app = NSApplication.sharedApplication()
+app.setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory
+
+bot_image = NSImage.alloc().initWithContentsOfFile_(BOT_PATH)
+if bot_image is None:
+    sys.stderr.write(f"missing bot image at {BOT_PATH}\n")
+    sys.exit(1)
+
+bot_w = 72.0
+bot_h = bot_w * (bot_image.size().height / bot_image.size().width)
+
+bubble_max_text_w = 200.0
+pad_h = 11.0
+pad_v = 8.0
+radius = 9.0
+
+font = NSFont.systemFontOfSize_weight_(11.0, 0.3)  # medium ~ 0.3
+text_attrs = {
+    NSFontAttributeName: font,
+    NSForegroundColorAttributeName: NSColor.blackColor(),
+}
+
+attr = NSAttributedString.alloc().initWithString_attributes_(args.message, text_attrs)
+bounds = attr.boundingRectWithSize_options_(
+    NSMakeSize(bubble_max_text_w, 1000.0),
+    (1 << 0) | (1 << 1)  # usesLineFragmentOrigin | usesFontLeading
+)
+text_w = math.ceil(bounds.size.width)
+text_h = math.ceil(bounds.size.height)
+
+bubble_w = text_w + pad_h * 2
+bubble_h = text_h + pad_v * 2
+
+gap = 8.0
+edge_pad = 8.0
+total_w = bot_w + gap + bubble_w + edge_pad
+total_h = max(bot_h, bubble_h) + edge_pad * 2
+
+screen = NSScreen.mainScreen() or NSScreen.screens()[0]
+visible = screen.visibleFrame()
+margin = 24.0
+window_frame = NSMakeRect(
+    visible.origin.x + visible.size.width - total_w - margin,
+    visible.origin.y + visible.size.height - total_h - margin,
+    total_w,
+    total_h,
+)
+
+window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+    window_frame, NSWindowStyleMaskBorderless, NSBackingStoreBuffered, False
+)
+window.setOpaque_(False)
+window.setBackgroundColor_(NSColor.clearColor())
+window.setLevel_(25)  # NSStatusWindowLevel
+window.setIgnoresMouseEvents_(True)
+window.setHasShadow_(False)
+window.setCollectionBehavior_(
+    NSWindowCollectionBehaviorCanJoinAllSpaces
+    | NSWindowCollectionBehaviorStationary
+    | NSWindowCollectionBehaviorIgnoresCycle
+    | NSWindowCollectionBehaviorFullScreenAuxiliary
+)
+
+bot_rect = NSMakeRect(0, (total_h - bot_h) / 2, bot_w, bot_h)
+bubble_rect = NSMakeRect(bot_w + gap, (total_h - bubble_h) / 2, bubble_w, bubble_h)
+
+
+class PopupView(NSView):
+    def initWithFrame_(self, frame):
+        self = objc.super(PopupView, self).initWithFrame_(frame)
+        return self
+
+    def isFlipped(self):
+        return True
+
+    def drawRect_(self, dirty):
+        ctx = NSGraphicsContext.currentContext()
+        ctx.setImageInterpolation_(NSImageInterpolationHigh)
+
+        bot_image.drawInRect_(bot_rect)
+
+        ctx.saveGraphicsState()
+        sh = NSShadow.alloc().init()
+        sh.setShadowOffset_(NSMakeSize(0, -2))
+        sh.setShadowBlurRadius_(8.0)
+        sh.setShadowColor_(NSColor.colorWithCalibratedWhite_alpha_(0.0, 0.30))
+        sh.set()
+
+        bubble = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
+            bubble_rect, radius, radius
+        )
+        tail = NSBezierPath.bezierPath()
+        tail.moveToPoint_(NSMakePoint(bubble_rect.origin.x + 1,
+                                      bubble_rect.origin.y + bubble_rect.size.height / 2 - 6))
+        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x - 8,
+                                      bubble_rect.origin.y + bubble_rect.size.height / 2))
+        tail.lineToPoint_(NSMakePoint(bubble_rect.origin.x + 1,
+                                      bubble_rect.origin.y + bubble_rect.size.height / 2 + 6))
+        tail.closePath()
+
+        NSColor.whiteColor().setFill()
+        bubble.fill()
+        tail.fill()
+        ctx.restoreGraphicsState()
+
+        text_rect = NSMakeRect(
+            bubble_rect.origin.x + pad_h,
+            bubble_rect.origin.y + pad_v,
+            bubble_rect.size.width - pad_h * 2,
+            bubble_rect.size.height - pad_v * 2,
+        )
+        attr.drawInRect_(text_rect)
+
+
+view = PopupView.alloc().initWithFrame_(NSMakeRect(0, 0, total_w, total_h))
+window.setContentView_(view)
+window.setAlphaValue_(0.0)
+window.orderFrontRegardless()
+
+if args.sound:
+    snd = NSSound.soundNamed_(args.sound)
+    if snd:
+        snd.play()
+
+NSAnimationContext.beginGrouping()
+NSAnimationContext.currentContext().setDuration_(0.22)
+window.animator().setAlphaValue_(1.0)
+NSAnimationContext.endGrouping()
+
+
+class Dismisser(NSObject):
+    def fire_(self, timer):
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.currentContext().setDuration_(0.35)
+        NSAnimationContext.currentContext().setCompletionHandler_(lambda: app.terminate_(None))
+        window.animator().setAlphaValue_(0.0)
+        NSAnimationContext.endGrouping()
+
+
+from Foundation import NSTimer
+dismisser = Dismisser.alloc().init()
+NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+    args.duration, dismisser, b"fire:", None, False
+)
+
+app.run()

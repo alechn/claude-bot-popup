@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "msg=$(jq -r '.message // \"Claude needs your attention\"'); nohup \"$HOME/.claude/bin/claude-notify\" --message \"$msg\" --duration 5 --sound Glass >/dev/null 2>&1 & disown; true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "nohup \"$HOME/.claude/bin/claude-notify\" --message \"Done!\" --duration 3 --sound Pop >/dev/null 2>&1 & disown; true"
+          }
+        ]
+      }
+    ]
+  }
+}
