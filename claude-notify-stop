@@ -23,8 +23,8 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
       | tr '\n' ' ' \
       | sed -E 's/  +/ /g; s/^ +//; s/ +$//')
     if [ -n "$cleaned" ]; then
-      if [ ${#cleaned} -gt 100 ]; then
-        msg="${cleaned:0:97}..."
+      if [ ${#cleaned} -gt 240 ]; then
+        msg="${cleaned:0:237}..."
       else
         msg="$cleaned"
       fi
@@ -32,6 +32,16 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   fi
 fi
 
-nohup "$HOME/.claude/bin/claude-notify" --message "$msg" --duration 5 --sound Pop </dev/null >/dev/null 2>&1 &
+# Scale duration with message length so long summaries are readable.
+len=${#msg}
+if [ "$len" -le 60 ]; then
+  duration=4
+elif [ "$len" -le 140 ]; then
+  duration=6
+else
+  duration=8
+fi
+
+nohup "$HOME/.claude/bin/claude-notify" --message "$msg" --duration "$duration" --sound Pop </dev/null >/dev/null 2>&1 &
 disown
 exit 0

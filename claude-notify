@@ -38,7 +38,7 @@ if bot_image is None:
 bot_w = 56.0
 bot_h = bot_w * (bot_image.size().height / bot_image.size().width)
 
-bubble_max_text_w = 170.0
+bubble_max_text_w = 260.0
 pad_h = 9.0
 pad_v = 6.0
 radius = 7.0
