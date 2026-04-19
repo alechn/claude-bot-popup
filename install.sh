@@ -34,6 +34,10 @@ cp "$REPO_DIR/claude-notify-stop" "$BIN_DIR/claude-notify-stop"
 chmod +x "$BIN_DIR/claude-notify-stop"
 echo "Installed: $BIN_DIR/claude-notify-stop"
 
+cp "$REPO_DIR/claude-notify-attention" "$BIN_DIR/claude-notify-attention"
+chmod +x "$BIN_DIR/claude-notify-attention"
+echo "Installed: $BIN_DIR/claude-notify-attention"
+
 if [[ ! -f "$IMAGE_DEST" ]]; then
   echo
   echo "Provide a path to your mascot PNG (transparent background recommended)."

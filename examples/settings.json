@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "msg=$(jq -r '.message // \"Claude needs your attention\"'); nohup \"$HOME/.claude/bin/claude-notify\" --message \"$msg\" --duration 5 --sound Glass >/dev/null 2>&1 & disown; true"
+            "command": "\"$HOME/.claude/bin/claude-notify-attention\""
           }
         ]
       }

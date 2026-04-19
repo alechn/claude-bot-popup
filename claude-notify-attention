@@ -1,0 +1,25 @@
+#!/bin/bash
+# Notification hook wrapper: short bot-voice status from the event message.
+set -u
+
+input=$(cat)
+raw=$(printf '%s' "$input" | jq -r '.message // "I need attention"' 2>/dev/null)
+
+case "$raw" in
+  *permission*|*approval*|*approve*)
+    msg="I need permission" ;;
+  *"waiting for your input"*|*idle*|*"waiting on"*)
+    msg="I'm waiting" ;;
+  *)
+    # Rephrase third-person Claude messages into bot voice, then truncate.
+    msg=$(printf '%s' "$raw" \
+      | sed -E "s/^Claude /I /; s/^Claude'?s /My /")
+    if [ ${#msg} -gt 60 ]; then
+      msg="${msg:0:57}..."
+    fi
+    ;;
+esac
+
+nohup "$HOME/.claude/bin/claude-notify" --message "$msg" --duration 5 --sound Glass </dev/null >/dev/null 2>&1 &
+disown
+exit 0

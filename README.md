@@ -54,10 +54,10 @@ Add to `~/.claude/settings.json` — see [examples/settings.json](examples/setti
 
 The two hooks worth adding:
 
-- **`Notification`** — fires when Claude needs your permission for something. Pulls the message text out of the hook's stdin JSON and shows it in the bubble.
-- **`Stop`** — fires when Claude finishes a response. The `claude-notify-stop` wrapper reads the hook's stdin to find the transcript path, extracts the last assistant text block, strips markdown, truncates to ~100 chars, and pipes that into the bubble — so the popup tells you *what* Claude just said, not just "Done!".
+- **`Notification`** — fires when Claude needs your attention. The `claude-notify-attention` wrapper compresses the event message into a bot-voice status (e.g. `"I need permission"`, `"I'm waiting"`).
+- **`Stop`** — fires when Claude finishes a response. The `claude-notify-stop` wrapper reads the hook's stdin to find the transcript path, finds the timestamp of the last user prompt (filtering out tool_result events that share the `user` type), and shows `"done, cooked for 43s"`-style elapsed time.
 
-Both hooks detach the popup with `nohup ... & disown` so they don't block Claude from continuing.
+Both wrappers detach the popup with `nohup ... & disown` so they don't block Claude from continuing.
 
 ## Customizing
 
@@ -71,7 +71,7 @@ Open `~/.claude/bin/claude-notify` and edit:
 ## Uninstall
 
 ```sh
-rm -rf ~/.claude/bin/claude-notify ~/.claude/bin/claude-notify-stop ~/.claude/notification-bot.png
+rm -rf ~/.claude/bin/claude-notify ~/.claude/bin/claude-notify-stop ~/.claude/bin/claude-notify-attention ~/.claude/notification-bot.png
 ```
 
 Then remove the `Notification` and `Stop` blocks from `~/.claude/settings.json`.
